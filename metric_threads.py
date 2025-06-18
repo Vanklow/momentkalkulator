@@ -1,12 +1,4 @@
-from dataclasses import dataclass
-
-@dataclass
-class ThreadSpec:
-    name: str
-    major_dia: float
-    minor_dia: float   # <--- NEW FIELD
-    tensile_area: float
-    head_dia: float
+from datatypes import ThreadSpec
 
 metric_threads = {
     "Coarse": {
@@ -83,3 +75,8 @@ metric_threads = {
         "M100x4.0":  ThreadSpec("M100x4.0", 100.0, 97.701, 5580.0, 135.0),
     }
 }
+
+flat_metric_threads = {}
+for group in metric_threads.values():
+    flat_metric_threads.update(group)
+

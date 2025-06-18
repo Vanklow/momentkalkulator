@@ -1,12 +1,4 @@
-from dataclasses import dataclass
-
-@dataclass
-class GasketMaterial:
-    name: str
-    yield_strength: float       # MPa
-    sealing_pressure: float     # MPa, typical required sealing pressure
-    friction_coeff: float       # friction coefficient for torque calc
-
+from datatypes import GasketMaterial
 gasket_materials = {
     # Copper variants
     "Copper (soft)": GasketMaterial("Copper (soft)", yield_strength=70, sealing_pressure=40, friction_coeff=0.25),

@@ -1,41 +1,9 @@
 # Bolt Moment Calculator - Main v1.2.0 (single-file, Canvas/online ready, dynamic diameters)
 # Versioned: 2025-05-16
+from datatypes import Material, ThreadSpec
+from metric_threads import flat_metric_threads as metric_threads
 
-from dataclasses import dataclass
-
-@dataclass
-class Material:
-    name: str
-    yield_strength: float    # MPa
-    tensile_strength: float  # MPa
-    friction_coeff: float    # For torque calc
-
-@dataclass
-class ThreadSpec:
-    name: str
-    major_dia: float    # mm
-    tensile_area: float # mm^2
-    head_dia: float     # mm (standard hex head for this size)
-
-# --- Metric Threads Database (with head diameters) ---
-metric_threads = {
-    "M4x0.7": ThreadSpec("M4x0.7", 4.0, 8.78, 7.0),
-    "M5x0.8": ThreadSpec("M5x0.8", 5.0, 14.2, 8.0),
-    "M6x1.0": ThreadSpec("M6x1.0", 6.0, 20.1, 10.0),
-    "M8x1.25": ThreadSpec("M8x1.25", 8.0, 36.6, 13.0),
-    "M10x1.5": ThreadSpec("M10x1.5", 10.0, 58.0, 16.0),
-    "M12x1.75": ThreadSpec("M12x1.75", 12.0, 84.3, 18.0),
-    "M16x2.0": ThreadSpec("M16x2.0", 16.0, 157, 24.0),
-    "M20x2.5": ThreadSpec("M20x2.5", 20.0, 245, 30.0),
-    "M24x3.0": ThreadSpec("M24x3.0", 24.0, 353, 36.0),
-    "M8x1.0": ThreadSpec("M8x1.0", 8.0, 38.2, 13.0),
-    "M10x1.25": ThreadSpec("M10x1.25", 10.0, 61.2, 16.0),
-    "M12x1.5": ThreadSpec("M12x1.5", 12.0, 92.2, 18.0),
-    "M16x1.5": ThreadSpec("M16x1.5", 16.0, 167, 24.0),
-    "M20x1.5": ThreadSpec("M20x1.5", 20.0, 270, 30.0),
-}
-
-materials = {
+materials_simple = {
     "4.6": Material("Steel 4.6", 240, 400, 0.14),
     "8.8": Material("Steel 8.8", 640, 800, 0.14),
     "10.9": Material("Steel 10.9", 940, 1040, 0.13),
@@ -52,6 +20,7 @@ materials = {
     "Copper": Material("Copper (soft)", 70, 220, 0.25),
     "Brass": Material("Brass", 200, 350, 0.16),
 }
+
 
 def bolt_tensile_capacity(thread: ThreadSpec, material: Material):
     return thread.tensile_area * material.tensile_strength  # N
@@ -88,9 +57,9 @@ if __name__ == "__main__":
 
     # === Lookup ===
     thread = metric_threads[thread_name]
-    bolt_mat = materials[bolt_material_name]
-    plate_mat = materials[plate_material_name]
-    nut_mat = materials[nut_material_name]
+    bolt_mat = materials_simple[bolt_material_name]
+    plate_mat = materials_simple[plate_material_name]
+    nut_mat = materials_simple[nut_material_name]
 
     # === Calculations ===
     bolt_capacity = bolt_tensile_capacity(thread, bolt_mat)

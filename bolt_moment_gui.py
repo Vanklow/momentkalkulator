@@ -1,7 +1,18 @@
 # bolt_moment_gui – GUI for Bolt Moment Calculator (wide layout, with manual material inputs)
 
+"""Interactive GUI for calculating bolt torque and preload.
+
+The layout is intentionally wide to keep the many input fields readable. Most of
+the heavy lifting is done in :func:`collect_inputs` and :func:`run_calc` while
+helper functions keep the interface responsive.  The script can be executed
+directly to start the Tk application.
+"""
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
+
+FONT = ("Consolas", 10)
+FONT_BOLD = ("Consolas", 10, "bold")
 from metric_threads import metric_threads
 from materials import materials
 from main import (
@@ -230,6 +241,7 @@ row_i += 1
 # --- Functions to update manual material fields from dropdown selections ---
 
 def fill_material_fields(material_obj, yield_entry, tensile_entry, friction_entry=None):
+    """Populate manual material fields from a :class:`Material` instance."""
     if material_obj:
         yield_entry.delete(0, tk.END)
         yield_entry.insert(0, str(material_obj.yield_strength))
@@ -281,68 +293,82 @@ def suggest_bolt_friction(*args):
 
 # --- Calculation function ---
 
-def run_calc():
+def collect_inputs():
+    """Gather and validate all user input from the GUI.
+
+    Returns a dictionary with typed values for use in :func:`run_calc`.
+    Raises ``ValueError`` if any required field is invalid.
+    """
+    thread_type = thread_type_var.get()
+    thread_val = thread_var.get()
+    thread_dict = metric_threads.get(thread_type, {})
+    thread = thread_dict.get(thread_val)
+    if not thread:
+        raise ValueError("Invalid thread")
+
+    bolt_yield = try_float(bolt_yield_entry.get())
+    bolt_tensile = try_float(bolt_tensile_entry.get())
+    if bolt_yield is None or bolt_tensile is None:
+        raise ValueError("Invalid numeric input for bolt material properties")
+
+    nut_yield = try_float(nut_yield_entry.get())
+    nut_tensile = try_float(nut_tensile_entry.get())
+    nut_friction = try_float(nut_friction_entry.get())
+    if nut_yield is None or nut_tensile is None or nut_friction is None:
+        raise ValueError("Invalid numeric input for nut material properties")
+
+    plate_yield = try_float(plate_yield_entry.get())
+    plate_tensile = try_float(plate_tensile_entry.get())
+    plate_friction = try_float(plate_friction_entry.get())
+    if plate_yield is None or plate_tensile is None or plate_friction is None:
+        raise ValueError("Invalid numeric input for plate material properties")
+
+    gasket_pressure = try_float(gasket_pressure_entry.get()) or 40.0
+    gasket_friction = try_float(gasket_friction_entry.get()) or 0.25
+
     try:
-        # --- Thread selection ---
-        thread_type = thread_type_var.get()
-        thread_val = thread_var.get()
-        thread_dict = metric_threads.get(thread_type, {})
-        thread = thread_dict.get(thread_val)
-        if not thread:
-            output_box.delete('1.0', tk.END)
-            output_box.insert(tk.END, "Error: Invalid thread type or thread selected.\n")
-            return
+        engagement_mm = float(engagement_entry.get())
+    except Exception:
+        engagement_mm = 10.0
+    try:
+        nut_engagement_mm = float(nut_engagement_entry.get())
+    except Exception:
+        nut_engagement_mm = 8.0
 
-        # --- Bolt material properties (manual override) ---
-        bolt_yield = try_float(bolt_yield_entry.get())
-        bolt_tensile = try_float(bolt_tensile_entry.get())
-        if bolt_yield is None or bolt_tensile is None:
-            output_box.delete('1.0', tk.END)
-            output_box.insert(tk.END, "Error: Invalid numeric input for bolt material properties.\n")
-            return
+    from datatypes import Material
+    bolt_material = Material("Bolt manual", bolt_yield, bolt_tensile, 0.15)
+    nut_material = Material("Nut manual", nut_yield, nut_tensile, nut_friction)
+    plate_material = Material("Plate manual", plate_yield, plate_tensile, plate_friction)
 
-        # --- Nut material properties ---
-        nut_yield = try_float(nut_yield_entry.get())
-        nut_tensile = try_float(nut_tensile_entry.get())
-        nut_friction = try_float(nut_friction_entry.get())
-        if nut_yield is None or nut_tensile is None or nut_friction is None:
-            output_box.delete('1.0', tk.END)
-            output_box.insert(tk.END, "Error: Invalid numeric input for nut material properties.\n")
-            return
+    return {
+        "thread": thread,
+        "bolt_material": bolt_material,
+        "nut_material": nut_material,
+        "plate_material": plate_material,
+        "gasket_pressure": gasket_pressure,
+        "gasket_friction": gasket_friction,
+        "engagement_mm": engagement_mm,
+        "nut_engagement_mm": nut_engagement_mm,
+    }
 
-        # --- Plate material properties ---
-        plate_yield = try_float(plate_yield_entry.get())
-        plate_tensile = try_float(plate_tensile_entry.get())
-        plate_friction = try_float(plate_friction_entry.get())
-        if plate_yield is None or plate_tensile is None or plate_friction is None:
-            output_box.delete('1.0', tk.END)
-            output_box.insert(tk.END, "Error: Invalid numeric input for plate material properties.\n")
-            return
 
-        # --- Gasket material properties ---
-        gasket_pressure = try_float(gasket_pressure_entry.get())
-        gasket_friction = try_float(gasket_friction_entry.get())
-        if gasket_pressure is None:
-            gasket_pressure = 40.0  # fallback default
-        if gasket_friction is None:
-            gasket_friction = 0.25  # fallback default
-
-        # --- Engagement lengths ---
-        try:
-            engagement_mm = float(engagement_entry.get())
-        except Exception:
-            engagement_mm = 10.0
-        try:
-            nut_engagement_mm = float(nut_engagement_entry.get())
-        except Exception:
-            nut_engagement_mm = 8.0
-
-        # --- Build Material dataclasses from manual inputs ---
-        from main import Material
-        # Bolt friction not used for torque, so just set to 0.15
-        bolt_material = Material("Bolt manual", bolt_yield, bolt_tensile, 0.15)
-        nut_material = Material("Nut manual", nut_yield, nut_tensile, nut_friction)
-        plate_material = Material("Plate manual", plate_yield, plate_tensile, plate_friction)
+def run_calc():
+    """Perform the calculation and render output in the text box."""
+    try:
+        data = collect_inputs()
+    except ValueError as err:
+        output_box.delete('1.0', tk.END)
+        output_box.insert(tk.END, f"Error: {err}\n")
+        return
+    try:
+        thread = data["thread"]
+        bolt_material = data["bolt_material"]
+        nut_material = data["nut_material"]
+        plate_material = data["plate_material"]
+        gasket_pressure = data["gasket_pressure"]
+        gasket_friction = data["gasket_friction"]
+        engagement_mm = data["engagement_mm"]
+        nut_engagement_mm = data["nut_engagement_mm"]
 
         # --- Calculate limiting modes ---
         if connection_type_var.get() == "Nut":
@@ -485,35 +511,11 @@ def run_calc():
         for line in gasket_output_lines:
             output.append(line)
 
-        output_box.delete('1.0', tk.END)
-        output_box.tag_configure('red', foreground='red', font=("Consolas", 10, 'bold'))
-        output_box.tag_configure('bold', font=("Consolas", 10, 'bold'))
-        output_box.tag_configure('section', font=("Consolas", 10, 'bold'))
-
-        for line in output:
-            if line.startswith("===="):
-                output_box.insert(tk.END, "\n" + line + "\n", 'section')
-            elif line.startswith("---"):
-                output_box.insert(tk.END, "\n" + line + "\n", 'section')
-            elif line.startswith("WARNING") or line.strip().startswith("- "):
-                output_box.insert(tk.END, line + "\n", 'red')
-            elif (
-                line.startswith("Recommended clamping force") or
-                line.startswith("Torque range for safe force") or
-                line.startswith("Torque range at yield") or
-                line.startswith("Resultant compression force") or
-                line.startswith("Bolt tensile limit") or
-                line.startswith("Nut thread strip-out limit") or
-                line.startswith("Threaded plate strip-out limit") or
-                line.startswith("Weakest mode:")
-            ):
-                output_box.insert(tk.END, line + "\n", 'bold')
-            else:
-                output_box.insert(tk.END, line + "\n")
+        show_output(output)
 
     except Exception as ex:
         output_box.delete('1.0', tk.END)
-        output_box.tag_configure('red', foreground='red', font=("Consolas", 10, 'bold'))
+        output_box.tag_configure('red', foreground='red', font=FONT_BOLD)
         if 'output' in locals():
             for line in output:
                 if line.startswith("WARNING") or line.strip().startswith("- "):
@@ -524,10 +526,40 @@ def run_calc():
         messagebox.showerror("Error", f"Exception occurred:\n{ex}")
 
 def try_float(s):
+    """Return ``float(s)`` or ``None`` if conversion fails."""
     try:
         return float(s)
     except Exception:
         return None
+
+
+def show_output(lines):
+    """Display formatted output lines in the text widget."""
+    output_box.delete('1.0', tk.END)
+    output_box.tag_configure('red', foreground='red', font=FONT_BOLD)
+    output_box.tag_configure('bold', font=FONT_BOLD)
+    output_box.tag_configure('section', font=FONT_BOLD)
+
+    for line in lines:
+        if line.startswith("===="):
+            output_box.insert(tk.END, "\n" + line + "\n", 'section')
+        elif line.startswith("---"):
+            output_box.insert(tk.END, "\n" + line + "\n", 'section')
+        elif line.startswith("WARNING") or line.strip().startswith("- "):
+            output_box.insert(tk.END, line + "\n", 'red')
+        elif (
+            line.startswith("Recommended clamping force") or
+            line.startswith("Torque range for safe force") or
+            line.startswith("Torque range at yield") or
+            line.startswith("Resultant compression force") or
+            line.startswith("Bolt tensile limit") or
+            line.startswith("Nut thread strip-out limit") or
+            line.startswith("Threaded plate strip-out limit") or
+            line.startswith("Weakest mode:")
+        ):
+            output_box.insert(tk.END, line + "\n", 'bold')
+        else:
+            output_box.insert(tk.END, line + "\n")
 
 
 # --- Button ---
@@ -539,9 +571,9 @@ for i in range(row_i+1):
 output_frame = ttk.Frame(root)
 output_frame.grid(row=0, column=1, sticky='nswe', padx=8, pady=8)
 output_frame.columnconfigure(0, weight=1)
-output_box = scrolledtext.ScrolledText(output_frame, width=90, height=48, font=("Consolas", 10))
-output_box.tag_configure('bold', font=("Consolas", 10, 'bold'))
-output_box.tag_configure('section', font=("Consolas", 10, 'bold'))
+output_box = scrolledtext.ScrolledText(output_frame, width=90, height=48, font=FONT)
+output_box.tag_configure('bold', font=FONT_BOLD)
+output_box.tag_configure('section', font=FONT_BOLD)
 output_box.grid(row=0, column=0, sticky='nswe')
 
 # --- Dropdown updaters ---

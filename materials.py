@@ -1,12 +1,4 @@
-from dataclasses import dataclass
-
-@dataclass
-class Material:
-    name: str
-    yield_strength: float
-    tensile_strength: float
-    friction_coeff: float
-
+from datatypes import Material
 materials = {
     "Steel": {
         "4.6": Material("Steel 4.6", 240, 400, 0.14),
